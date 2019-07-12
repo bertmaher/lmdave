@@ -34,7 +34,6 @@ v0.8  Vesselin Bontchev, bontchev@fbihh.informatik.uni-hamburg.de, Aug 92
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <dos.h>
 #ifdef __TURBOC__
 #include <dir.h>
 /*
@@ -69,7 +68,7 @@ int reloc90(FILE *ifile,FILE *ofile,long fpos);
 int reloc91(FILE *ifile,FILE *ofile,long fpos);
 #endif
 
-void main(int argc,char **argv){
+int main(int argc,char **argv){
     int fnamechk(char*,char*,char*,int,char**);
     int fnamechg(char*,char*,char*,int);
     int rdhead(FILE *,int *);
@@ -144,7 +143,7 @@ int fnamechk(char *ipath,char *opath, char *ofname,
     strcpy(ipath,argv[1]);
     parsepath(ipath,&idx_name,&idx_ext);
     if (! ipath[idx_ext]) strcpy(ipath+idx_ext,".exe");
-    if(! stricmp(ipath+idx_name,tmpfname)){
+    if(! strcasecmp(ipath+idx_name,tmpfname)){
 	printf("'%s':bad filename.\n",ipath);
 	return(FAILURE);
     }
@@ -154,7 +153,7 @@ int fnamechk(char *ipath,char *opath, char *ofname,
 	strcpy(opath,argv[2]);
     parsepath(opath,&idx_name,&idx_ext);
     if (! opath[idx_ext]) strcpy(opath+idx_ext,".exe");
-    if (!stricmp(opath+idx_ext,backup_ext)){
+    if (!strcasecmp(opath+idx_ext,backup_ext)){
 	printf("'%s':bad filename.\n",opath);
 	return(FAILURE);
     }
@@ -201,6 +200,8 @@ int fnamechg(char *ipath,char *opath,char *ofname,int rename_sw) {
 }
 
 int isjapan() {
+  return 0;
+#if 0
     union REGS r;
     struct SREGS rs;
     BYTE buf[34];
@@ -211,6 +212,7 @@ int isjapan() {
 	r.x.ax=0x3800;		/* svc 38H, check for country v0.6 */
     intdosx(&r,&r,&rs);
     return (! strcmp ((char *) (buf + 2), "\\"));       /* v0.8 */
+#endif
 }
 
 void parsepath(char *pathname, int *fname, int *ext) {
@@ -219,7 +221,7 @@ void parsepath(char *pathname, int *fname, int *ext) {
     int i;
 
     *fname=0; *ext=0;
-    for(i=0;c=pathname[i];i++) {
+    for(i=0;(c=pathname[i]);i++) {
 		if(japan_f && iskanji(c))
 	    i++;
 	else
@@ -545,4 +547,3 @@ int getbit(bitstream *p) {
 
     return b;
 }
-
