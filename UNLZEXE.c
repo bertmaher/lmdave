@@ -75,6 +75,10 @@ WORD getword(FILE *fp) {
   return ret;
 }
 
+void putword(WORD w, FILE *fp) {
+  (void)fwrite(&w, sizeof(WORD), 1, fp);
+}
+
 int main(int argc,char **argv){
     int fnamechk(char*,char*,char*,int,char**);
     int fnamechg(char*,char*,char*,int);
@@ -419,8 +423,8 @@ int reloc90(FILE *ifile,FILE *ofile,long fpos) {
 	c=getword(ifile);
 	for(;c>0;c--) {
 	    rel_off=getword(ifile);
-	    putw(rel_off,ofile);
-	    putw(rel_seg,ofile);
+	    putword(rel_off,ofile);
+	    putword(rel_seg,ofile);
 	    rel_count++;
 	}
 	rel_seg += 0x1000;
@@ -451,8 +455,8 @@ int reloc91(FILE *ifile,FILE *ofile,long fpos) {
 	rel_off += span;
 	rel_seg += (rel_off & ~0x0f)>>4;
 	rel_off &= 0x0f;
-	putw(rel_off,ofile);
-	putw(rel_seg,ofile);
+	putword(rel_off,ofile);
+	putword(rel_seg,ofile);
 	rel_count++;
     }
     ohead[3]=rel_count;
@@ -472,8 +476,8 @@ int getbit(bitstream *);
 /*---------------------*/
 /* decompressor routine */
 int unpack(FILE *ifile,FILE *ofile){
-    int len;
-    int span;
+    int16_t len;
+    int16_t span;
     long fpos;
     bitstream bits;
     static BYTE data[0x4500], *p=data;
@@ -555,7 +559,7 @@ void initbits(bitstream *p,FILE *filep){
 }
 
 int getbit(bitstream *p) {
-    int b;
+    WORD b;
     b = p->buf & 1;
     if(--p->count == 0){
 	(p->buf)=getword(p->fp);
