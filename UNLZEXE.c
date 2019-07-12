@@ -32,6 +32,7 @@ v0.8  Vesselin Bontchev, bontchev@fbihh.informatik.uni-hamburg.de, Aug 92
 */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #ifdef __TURBOC__
@@ -49,7 +50,7 @@ v0.8  Vesselin Bontchev, bontchev@fbihh.informatik.uni-hamburg.de, Aug 92
 #define FAILURE 1
 #define SUCCESS 0
 
-typedef unsigned int WORD;
+typedef uint16_t WORD;
 typedef unsigned char BYTE;
 
 int isjapan(void);
@@ -67,6 +68,12 @@ char ipath[FILENAME_MAX],
 int reloc90(FILE *ifile,FILE *ofile,long fpos);
 int reloc91(FILE *ifile,FILE *ofile,long fpos);
 #endif
+
+WORD getword(FILE *fp) {
+  WORD ret;
+  (void)fread(&ret, sizeof(WORD), 1, fp);
+  return ret;
+}
 
 int main(int argc,char **argv){
     int fnamechk(char*,char*,char*,int,char**);
@@ -99,7 +106,7 @@ int main(int argc,char **argv){
 	printf("'%s' is not LZEXE file.\n",ipath);
 	fclose(ifile); exit(EXIT_FAILURE);
     }
-    if((ofile=fopen(opath,"w+b"))==NULL){
+    if((ofile=fopen(opath,"wb"))==NULL){
 	printf("can't open '%s'.\n",opath);
 	fclose(ifile); exit(EXIT_FAILURE);
     }
@@ -316,17 +323,25 @@ int rdhead(FILE *ifile ,int *ver){
  *	*ver=91; return SUCCESS ;
  *  }
  */
-    if (fread (ihead, 1, sizeof ihead, ifile) != sizeof ihead)	     /* v0.8 */
+    if (fread (ihead, 1, sizeof ihead, ifile) != sizeof ihead)	     /* v0.8 */ {
+      fprintf(stderr, "Incomplete header\n");
 	return FAILURE; 					     /* v0.8 */
+    }
     memcpy (ohead, ihead, sizeof ohead);			     /* v0.8 */
     if((ihead [0] != 0x5a4d && ihead [0] != 0x4d5a) ||		     /* v0.8 */
-       ihead [0x0d] != 0 || ihead [0x0c] != 0x1c)		     /* v0.8 */
+       ihead [0x0d] != 0 || ihead [0x0c] != 0x1c)		     /* v0.8 */ {
+      fprintf(stderr, "Bad magic numbers: %x %x %x\n", ihead[0], ihead[0x0d], ihead[0x0c]);
 	return FAILURE; 					     /* v0.8 */
+    }
     entry = ((long) (ihead [4] + ihead[0x0b]) << 4) + ihead[0x0a];   /* v0.8 */
-    if (fseek (ifile, entry, SEEK_SET) != 0)			     /* v0.8 */
+    if (fseek (ifile, entry, SEEK_SET) != 0)			     /* v0.8 */ {
+      fprintf(stderr, "Truncated file\n");
 	return FAILURE; 					     /* v0.8 */
-    if (fread (sigbuf, 1, sizeof sigbuf, ifile) != sizeof sigbuf)    /* v0.8 */
+    }
+    if (fread (sigbuf, 1, sizeof sigbuf, ifile) != sizeof sigbuf)    /* v0.8 */ {
+      fprintf(stderr, "Truncated signature\n");
 	return FAILURE; 					     /* v0.8 */
+    }
     if (memcmp (sigbuf, sig90, sizeof sigbuf) == 0) {		     /* v0.8 */
 	*ver = 90;						     /* v0.8 */
 	return SUCCESS; 					     /* v0.8 */
@@ -335,6 +350,7 @@ int rdhead(FILE *ifile ,int *ver){
 	*ver = 91;						     /* v0.8 */
 	return SUCCESS; 					     /* v0.8 */
     }								     /* v0.8 */
+    fprintf(stderr, "Unknown LZEXE version\n");
     return FAILURE;
 }
 
@@ -360,7 +376,10 @@ int mkreltbl(FILE *ifile,FILE *ofile,int ver) {
     /* inf[6]:size of decompressor with  compressed relocation table (BYTE) */
     /* inf[7]:check sum of decompresser with compressd relocation table(Ver.0.90) */
     ohead[0x0c]=0x1c;		/* start position of relocation table */
-    fseek(ofile,0x1cL,SEEK_SET);
+    if (fseek(ofile,0x1cL,SEEK_SET) == -1) {
+      perror("Error seeking to relocation table in output file");
+      return FAILURE;
+    }
     switch(ver){
     case 90: i=reloc90(ifile,ofile,fpos);
 	     break;
@@ -397,15 +416,15 @@ int reloc90(FILE *ifile,FILE *ofile,long fpos) {
     rel_seg=0;
     do{
 	if(feof(ifile) || ferror(ifile) || ferror(ofile)) return(FAILURE);
-	c=getw(ifile);
+	c=getword(ifile);
 	for(;c>0;c--) {
-	    rel_off=getw(ifile);
+	    rel_off=getword(ifile);
 	    putw(rel_off,ofile);
 	    putw(rel_seg,ofile);
 	    rel_count++;
 	}
 	rel_seg += 0x1000;
-    } while(rel_seg!=(0xf000+0x1000));
+    } while(rel_seg!=0); // (0xf000+0x1000));
     ohead[3]=rel_count;
     return(SUCCESS);
 }
@@ -421,7 +440,7 @@ int reloc91(FILE *ifile,FILE *ofile,long fpos) {
     for(;;) {
 	if(feof(ifile) || ferror(ifile) || ferror(ofile)) return(FAILURE);
 	if((span=getc(ifile))==0) {
-	    span=getw(ifile);
+	    span=getword(ifile);
 	    if(span==0){
 		rel_seg += 0x0fff;
 		continue;
@@ -531,7 +550,7 @@ void wrhead(FILE *ofile) {
 void initbits(bitstream *p,FILE *filep){
     p->fp=filep;
     p->count=0x10;
-    p->buf=getw(filep);
+    p->buf=getword(filep);
     /* printf("%04x ",p->buf); */
 }
 
@@ -539,7 +558,7 @@ int getbit(bitstream *p) {
     int b;
     b = p->buf & 1;
     if(--p->count == 0){
-	(p->buf)=getw(p->fp);
+	(p->buf)=getword(p->fp);
 	/* printf("%04x ",p->buf); */
 	p->count= 0x10;
     }else
